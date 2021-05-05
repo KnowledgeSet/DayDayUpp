@@ -15,8 +15,9 @@ int main(int argc, const char * argv[]) {
         // insert code here...
         NSLog(@"Hello, World!");
         [CFNetworkTest realmToIP:@"www.baidu.com"];
-        [CFNetworkTest parsingIPAddress:@"www.apple.com"];
-        [CFNetworkTest getIPAddressByHostName:@"www.apple.com"];
+        [CFNetworkTest parsingIPAddress:@"www.baidu.com"];
+        [CFNetworkTest getIPAddressByHostName:@"www.baidu.com"];
+        [CFNetworkTest getIpAddress:@"www.apple.com"];
     }
     return 0;
 }

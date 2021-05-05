@@ -9,7 +9,14 @@
 #import "CFNetworkTest.h"
 
 @implementation CFNetworkTest
+/*
+ 方法一，二 中 都是利用C的接口来实现，只不过在拿到 hostent * 之后处理的方式不一样，第二种方法相对要更快一点哟，另外,有些公司的域名可能是对应的服务器集群，会有很多个ip地址，像百度，网易啦这些， 我们默认都是取的数组中的第一个元素，如果你有需求要拿到其他地址， 遍历 h_addr_list 就可以啦。
+
+ 方法三，是利用OC原生的方法来实现的，
+ 从时间上来看，方法二最快，一、三相对来说慢一些，不过时间相差非常小
+ */
 + (NSString *)realmToIP:(NSString *)hostName {
+    NSDate *date = [NSDate date];
     const char *host = [hostName UTF8String];
     // Get host entry info for given host
     struct hostent *remoteHostEnt = gethostbyname(host);
@@ -20,10 +27,12 @@
     // Convert numeric addr to ASCII string
     char *sRemoteInAddr = inet_ntoa(*remoteInAddr);
     NSString *str = [NSString stringWithFormat:@"%s", sRemoteInAddr];
+    NSLog(@"1 time: %f", [[NSDate date] timeIntervalSinceDate:date]);
     return str;
 }
 
-+ (NSString *)parsingIPAddress:(NSString *)strHostName {
++ (NSArray *)parsingIPAddress:(NSString *)strHostName {
+    NSDate *date = [NSDate date];
     const char *szname = [strHostName UTF8String];
     struct hostent *phot;
     @try {
@@ -49,6 +58,8 @@
     }
     // 地址类型
     NSLog(@"Address type: %s", (phot->h_addrtype == AF_INET) ? "AF_INET" : "AF_INET6");
+    
+    NSMutableArray *result = @[].mutableCopy;
     // ip地址
     for (int i = 0; phot->h_addr_list[i]; i++) {
         /*
@@ -56,19 +67,23 @@
          */
         struct in_addr addr = *(struct in_addr *)phot->h_addr_list[i];
         NSLog(@"IP addr %d: %u %s", i+1, addr, inet_ntoa(addr));
+        
+        
+        struct in_addr ip_addr;
+        memcpy(&ip_addr, phot->h_addr_list[i], 4);
+        
+        char ip[20] = {0};
+        inet_ntop(AF_INET, &ip_addr, ip, sizeof(ip));
+        
+        NSString *strIPAddress = [NSString stringWithUTF8String:ip];
+        [result addObject:strIPAddress];
     }
-    
-    struct in_addr ip_addr;
-    memcpy(&ip_addr, phot->h_addr_list[0], 4);
-    
-    char ip[20] = {0};
-    inet_ntop(AF_INET, &ip_addr, ip, sizeof(ip));
-    
-    NSString *strIPAddress = [NSString stringWithUTF8String:ip];
-    return strIPAddress;
+    NSLog(@"2 time: %f", [[NSDate date] timeIntervalSinceDate:date]);
+    return result;
 }
 
 + (NSString *)getIPAddressByHostName:(NSString *)strHostName {
+    NSDate *date = [NSDate date];
     Boolean result, bResolved;
     CFHostRef hostRef;
     CFArrayRef addresses = NULL;
@@ -99,12 +114,61 @@
                 strcpy(ip, inet_ntoa(remoteAddr->sin_addr));
                 NSString *str = [NSString stringWithUTF8String:ip];
                 NSLog(@"-----: %@", str);
+                NSLog(@"3 time: %f", [[NSDate date] timeIntervalSinceDate:date]);
                 return str;
             }
         }
     }
     CFRelease(hostNameRef);
     CFRelease(hostRef);
+    NSLog(@"3 time: %f", [[NSDate date] timeIntervalSinceDate:date]);
     return nil;
+}
+
+void host_call_back(CFHostRef theHost, CFHostInfoType typeInfo, const CFStreamError *error, void *info) {
+    
+}
+
++ (NSArray *)getIpAddress:(NSString *)host {
+    
+    // 解析域名
+    CFHostRef hostRef = CFHostCreateWithName(NULL, (__bridge CFStringRef)host);
+    // 设置异步
+    CFHostClientContext context;
+    // memset 作用是在一段内存块中填充某个给定的值，它是对较大的结构体或数组进行清零操作的一种最快方法
+    memset(&context, 0, sizeof(CFHostClientContext));
+    CFHostSetClient(hostRef, host_call_back, &context);
+    
+    // 添加至runloop
+    CFHostScheduleWithRunLoop(hostRef, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    // 开始解析
+    CFStreamError streamError;
+    Boolean success = CFHostStartInfoResolution(hostRef, kCFHostAddresses, &streamError);
+    
+    // 等待完成
+    [[NSRunLoop currentRunLoop] acceptInputForMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    // 取消运行循环
+    CFHostUnscheduleFromRunLoop(hostRef, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    
+    // 解析完成
+    // 取得解析的ip地址
+    Boolean flag;
+    NSArray *array = (__bridge NSArray *)CFHostGetAddressing(hostRef, &flag);
+    // 释放对象
+    CFRelease(hostRef);
+    if (flag == NO) {
+        return nil;
+    }
+    
+    struct sockaddr_in *sock_ptr;
+    NSMutableArray *result = [NSMutableArray array];
+    for (NSData *ipaddr in array) {
+        sock_ptr = (struct sockaddr_in *)[ipaddr bytes];
+        const char *addr = inet_ntoa(sock_ptr->sin_addr);
+        NSString *ip = [NSString stringWithUTF8String:addr];
+        [result addObject:ip];
+        NSLog(@"ip ========= %@", ip);
+    }
+    return result;
 }
 @end

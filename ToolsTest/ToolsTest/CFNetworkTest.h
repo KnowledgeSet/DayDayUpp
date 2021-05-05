@@ -10,7 +10,8 @@
 
 @interface CFNetworkTest : NSObject
 + (NSString *)realmToIP:(NSString *)hostName;
-+ (NSString *)parsingIPAddress:(NSString *)strHostName;
++ (NSArray *)parsingIPAddress:(NSString *)strHostName;
 + (NSString *)getIPAddressByHostName:(NSString *)strHostName;
++ (NSArray *)getIpAddress:(NSString *)host;
 @end
 
